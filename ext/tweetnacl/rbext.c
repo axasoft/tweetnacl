@@ -39,14 +39,14 @@ VALUE m_crypto_box(VALUE self, VALUE _m, VALUE _n, VALUE _pk, VALUE _sk) {
   char * nonce = RSTRING_PTR(_n);
   char * pk = RSTRING_PTR(_pk);
   char * sk = RSTRING_PTR(_sk);
-  int len = strlen(message);
+  int len = RSTRING_LEN(_m);
   char * padded_message = (char*)calloc(sizeof(char), len + PADDING_LEN);
-  memcpy(padded_message + PADDING_LEN, message, strlen(message));
-  char * c = malloc(strlen(message) + PADDING_LEN);
+  memcpy(padded_message + PADDING_LEN, message, len);
+  char * c = malloc(len + PADDING_LEN);
   int res = crypto_box(c, padded_message, len + PADDING_LEN, nonce, pk, sk);
   // TODO: use an exception instead of exit()
   if (0 != res) { fprintf(stderr, "Something went wrong\n"); exit(res); }
-  VALUE ret = rb_str_new(c, len + PADDING_LEN);
+  VALUE ret = rb_str_new(c + 16, len + 16);
   return ret;
 }
 
@@ -63,15 +63,16 @@ VALUE m_crypto_box_open(VALUE self, VALUE _c, VALUE _n, VALUE _pk, VALUE _sk) {
   char * nonce = RSTRING_PTR(_n);
   char * pk = RSTRING_PTR(_pk);
   char * sk = RSTRING_PTR(_sk);
-  int padded_mlen = rb_str_strlen(_c);
-  unsigned char * message = (unsigned char*)calloc(padded_mlen, sizeof(unsigned char));
+  int len = RSTRING_LEN(_c);
+  unsigned char * ciphertext = (unsigned char*)calloc(sizeof(unsigned char), len + 16);
+  memcpy(ciphertext + 16, c, len);
 
-  int res = crypto_box_open(message, c, padded_mlen, nonce, pk, sk);
+  unsigned char * message = (unsigned char*)calloc(len + PADDING_LEN, sizeof(unsigned char));
+
+  int res = crypto_box_open(message, ciphertext, len + 16, nonce, pk, sk);
   if (0 != res) { rb_raise(rb_eRuntimeError, "crypto_box_open did not work. error %d", res); }
 
-  message[padded_mlen + 1] = 0;
-
-  VALUE ret = rb_str_new2(message + PADDING_LEN);
+  VALUE ret = rb_str_new(message + PADDING_LEN, len - 16);
   return ret;
 }
 
@@ -79,19 +80,19 @@ VALUE m_crypto_secretbox(VALUE self, VALUE _m, VALUE _n, VALUE _k) {
   if(_m == Qnil) { rb_raise(rb_eArgError, "A message should have been given"); }
   if(_k == Qnil) { rb_raise(rb_eArgError, "Secret key should have been given"); }
   if (RSTRING_LEN(_n)  != 24) { rb_raise(rb_eArgError, "nonce should be 24-byte long"); }
-  if (RSTRING_LEN(_k) != 32) { rb_raise(rb_eArgError, "Secret key should be 24-byte long"); }
+  if (RSTRING_LEN(_k) != 32) { rb_raise(rb_eArgError, "Secret key should be 32-byte long"); }
 
   char * message = RSTRING_PTR(_m);
   char * nonce = RSTRING_PTR(_n);
   char * k = RSTRING_PTR(_k);
-  int len = strlen(message);
+  int len = RSTRING_LEN(_m);
   char * padded_message = (char*)calloc(sizeof(char), len + PADDING_LEN);
-  memcpy(padded_message + PADDING_LEN, message, strlen(message));
-  char * c = malloc(strlen(message) + PADDING_LEN);
+  memcpy(padded_message + PADDING_LEN, message, len);
+  char * c = malloc(len + PADDING_LEN);
   int res = crypto_secretbox(c, padded_message, len + PADDING_LEN, nonce, k);
   // TODO: use an exception instead of exit()
   if (0 != res) { fprintf(stderr, "Something went wrong\n"); exit(res); }
-  VALUE ret = rb_str_new(c, len + PADDING_LEN);
+  VALUE ret = rb_str_new(c + 16, len + 16);
   return ret;
 }
 
@@ -104,13 +105,17 @@ VALUE m_crypto_secretbox_open(VALUE self, VALUE _c, VALUE _n, VALUE _k) {
   unsigned char * c = RSTRING_PTR(_c);
   char * nonce = RSTRING_PTR(_n);
   char * k = RSTRING_PTR(_k);
-  int padded_mlen = rb_str_strlen(_c);
-  char * message = calloc(padded_mlen, sizeof(char));
+  int len = RSTRING_LEN(_c);
 
-  int res = crypto_secretbox_open(message, c, padded_mlen, nonce, k);
+  unsigned char * ciphertext = (unsigned char*)calloc(sizeof(unsigned char), len + 16);
+  memcpy(ciphertext + 16, c, len);
+
+  char * message = calloc(len + PADDING_LEN, sizeof(char));
+
+  int res = crypto_secretbox_open(message, ciphertext, len + 16, nonce, k);
   if (0 != res) { rb_raise(rb_eRuntimeError, "crypto_secretbox_open did not work"); }
 
-  return rb_str_new2(message + PADDING_LEN);
+  return rb_str_new(message + PADDING_LEN, len - 16);
 }
 
 VALUE m_crypto_sign_keypair(VALUE self) {
