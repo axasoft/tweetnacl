@@ -12,6 +12,15 @@ void hexdump(char * data, int len)
   printf("\n");
 }
 
+extern int salsa_rounds;
+
+VALUE m_crypto_box_configure_rounds(VALUE self, VALUE _n) {
+  if(_n == Qnil) { rb_raise(rb_eArgError, "Number of rounds should have been given"); }
+  int old_salsa_rounds = salsa_rounds;
+  salsa_rounds = NUM2INT(_n);
+  return INT2NUM(old_salsa_rounds);
+}
+
 VALUE m_crypto_box_keypair(VALUE self) {
   VALUE ary = rb_ary_new2(2);
   unsigned char *pk = calloc(crypto_box_PUBLICKEYBYTES, sizeof(unsigned char));
@@ -169,6 +178,8 @@ VALUE m_crypto_sign_open(VALUE self, VALUE _c, VALUE _k) {
 
 void Init_tweetnacl() {
   VALUE c = rb_define_module("TweetNaCl");
+
+  rb_define_module_function(c , "crypto_box_configure_rounds"                , RUBY_METHOD_FUNC(m_crypto_box_configure_rounds), 1);
 
   rb_define_module_function(c , "crypto_box_keypair"                         , RUBY_METHOD_FUNC(m_crypto_box_keypair)    , 0);
 
